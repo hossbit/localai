@@ -130,7 +130,7 @@ resolve_llama_cpp_url() {
 
   log "Finding llama.cpp $LLAMA_CPP_VERSION asset for backend: $LLAMA_CPP_BACKEND"
   if [ "$LLAMA_CPP_VERSION" = "latest" ]; then
-    LLAMA_CPP_JSON="$(github_api_get "$LLAMA_CPP_LATEST_API")"
+    LLAMA_CPP_JSON="$(resolve_llama_cpp_latest_json)"
     LLAMA_CPP_VERSION="$(jq -er '.tag_name' <<<"$LLAMA_CPP_JSON")"
   else
     release_api="$(release_api_for_version "$LLAMA_CPP_VERSION" "$LLAMA_CPP_RELEASE_API" "$LLAMA_CPP_LATEST_API")"
@@ -138,11 +138,15 @@ resolve_llama_cpp_url() {
   fi
 
   # cuda has no prebuilt release asset -- it's a source build pinned to this
-  # same resolved $LLAMA_CPP_VERSION tag, so cuda and the other backends
-  # never silently drift to different llama.cpp revisions.
+  # same resolved $LLAMA_CPP_VERSION tag (a real git tag either way, stable
+  # or bleeding-edge), so cuda and the other backends never silently drift to
+  # different llama.cpp revisions.
   [ "$LLAMA_CPP_BACKEND" = "cuda" ] && return 0
 
-  LLAMA_CPP_URL="$(release_asset_url "$LLAMA_CPP_JSON" "$LLAMA_CPP_ASSET_RE")"
+  # A stable vX.Y.Z release carries no binaries of its own -- resolve to the
+  # bleeding-edge release its assets actually live in.
+  LLAMA_CPP_BINARY_JSON="$(resolve_llama_cpp_binary_json "$LLAMA_CPP_JSON")"
+  LLAMA_CPP_URL="$(release_asset_url "$LLAMA_CPP_BINARY_JSON" "$LLAMA_CPP_ASSET_RE")"
 
   [ -n "$LLAMA_CPP_URL" ] || fail "no llama.cpp asset found for backend '$LLAMA_CPP_BACKEND' in release $LLAMA_CPP_VERSION"
 }
@@ -214,7 +218,7 @@ fallback_to_cpu_backend() {
   resolve_llama_cpp_url
 
   log "Downloading llama.cpp $LLAMA_CPP_VERSION (cpu fallback backend)"
-  download_verified_asset "$LLAMA_CPP_JSON" "$LLAMA_CPP_URL" "$DOWNLOAD_DIR/llama.cpp.cpu.tar.gz" "llama.cpp cpu fallback"
+  download_verified_asset "$LLAMA_CPP_BINARY_JSON" "$LLAMA_CPP_URL" "$DOWNLOAD_DIR/llama.cpp.cpu.tar.gz" "llama.cpp cpu fallback"
 
   log "Installing llama.cpp CPU fallback"
   install_llama_cpp_archive "$DOWNLOAD_DIR/llama.cpp.cpu.tar.gz"
@@ -266,7 +270,7 @@ trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
 
 if [ "$LLAMA_CPP_BACKEND" != "cuda" ]; then
   log "Downloading llama.cpp $LLAMA_CPP_VERSION ($LLAMA_CPP_BACKEND backend)"
-  download_verified_asset "$LLAMA_CPP_JSON" "$LLAMA_CPP_URL" "$DOWNLOAD_DIR/llama.cpp.tar.gz" "llama.cpp"
+  download_verified_asset "$LLAMA_CPP_BINARY_JSON" "$LLAMA_CPP_URL" "$DOWNLOAD_DIR/llama.cpp.tar.gz" "llama.cpp"
 fi
 
 log "Downloading llama-swap $LLAMA_SWAP_VERSION"

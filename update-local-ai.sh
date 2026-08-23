@@ -209,34 +209,36 @@ cleanup_bin_artifacts() {
 # restore the real active one afterward.
 update_llama_cpp_backend() {
   local backend="$1"
-  local current_version url
+  local current_version url compare_tag
 
   LLAMA_CPP_BACKEND="$backend"
   if [ "$backend" != "cuda" ]; then
     select_llama_cpp_asset_regex ""
-    url="$(release_asset_url "$LLAMA_CPP_JSON" "$LLAMA_CPP_ASSET_RE")"
+    url="$(release_asset_url "$LLAMA_CPP_BINARY_JSON" "$LLAMA_CPP_ASSET_RE")"
     [ -n "$url" ] || fail "no llama.cpp asset found for backend: $backend"
   fi
 
   if [ "$backend" = "cuda" ]; then
     current_version="$(cuda_installed_revision)"
+    compare_tag="$LLAMA_CPP_TAG"
   else
     current_version="$(llama_cpp_backend_version "$backend")"
+    compare_tag="$LLAMA_CPP_BINARY_TAG"
   fi
-  printf 'llama.cpp (%s): installed=%s latest=%s\n' "$backend" "${current_version:-none}" "$LLAMA_CPP_TAG"
+  printf 'llama.cpp (%s): installed=%s latest=%s\n' "$backend" "${current_version:-none}" "$compare_tag"
 
-  if [ -n "$current_version" ] && llama_cpp_versions_match "$LLAMA_CPP_TAG" "$current_version"; then
+  if [ -n "$current_version" ] && llama_cpp_versions_match "$compare_tag" "$current_version"; then
     return 0
   fi
 
-  log "Installing llama.cpp $LLAMA_CPP_TAG ($backend)"
+  log "Installing llama.cpp $compare_tag ($backend)"
   if [ "$backend" = "cuda" ]; then
     LLAMA_CPP_VERSION="$LLAMA_CPP_TAG"
     cuda_build_and_install "$TMP_DIR" ||
       fail "CUDA build failed for backend cuda. See the error above."
   else
     mkdir -p "$TMP_DIR/llama.cpp-$backend"
-    download_verified_asset "$LLAMA_CPP_JSON" "$url" "$TMP_DIR/llama.cpp-$backend.tar.gz" "llama.cpp ($backend)"
+    download_verified_asset "$LLAMA_CPP_BINARY_JSON" "$url" "$TMP_DIR/llama.cpp-$backend.tar.gz" "llama.cpp ($backend)"
     tar -xzf "$TMP_DIR/llama.cpp-$backend.tar.gz" -C "$TMP_DIR/llama.cpp-$backend" || fail "failed to extract llama.cpp ($backend)"
     install_llama_cpp_release_dir "$TMP_DIR/llama.cpp-$backend" "$TMP_DIR"
   fi
@@ -327,11 +329,18 @@ fi
 ###############################################################################
 
 log "Fetching release metadata"
-LLAMA_CPP_JSON="$(github_api_get "$LLAMA_CPP_LATEST_API")"
+LLAMA_CPP_JSON="$(resolve_llama_cpp_latest_json)"
 LLAMA_SWAP_JSON="$(github_api_get "$LLAMA_SWAP_LATEST_API")"
 
 LLAMA_CPP_TAG=$(jq -er '.tag_name' <<<"$LLAMA_CPP_JSON")
 LLAMA_SWAP_TAG=$(jq -er '.tag_name' <<<"$LLAMA_SWAP_JSON")
+
+# A stable vX.Y.Z release carries no binaries of its own -- resolve to the
+# bleeding-edge release its assets actually live in. Used for every non-cuda
+# backend below; cuda builds from source and checks out $LLAMA_CPP_TAG
+# directly regardless of channel.
+LLAMA_CPP_BINARY_JSON="$(resolve_llama_cpp_binary_json "$LLAMA_CPP_JSON")"
+LLAMA_CPP_BINARY_TAG=$(jq -er '.tag_name' <<<"$LLAMA_CPP_BINARY_JSON")
 LLAMA_SWAP_URL="$(release_asset_url "$LLAMA_SWAP_JSON" "$LLAMA_SWAP_ASSET_RE")"
 
 [ -n "$LLAMA_SWAP_URL" ] || fail "no llama-swap Linux amd64 asset found"
@@ -372,11 +381,13 @@ NEED_CPP_FOR=()
 for BACKEND in "${BACKENDS_TO_UPDATE[@]}"; do
   if [ "$BACKEND" = "cuda" ]; then
     CURRENT_VERSION="$(cuda_installed_revision)"
+    COMPARE_TAG="$LLAMA_CPP_TAG"
   else
     CURRENT_VERSION="$(llama_cpp_backend_version "$BACKEND")"
+    COMPARE_TAG="$LLAMA_CPP_BINARY_TAG"
   fi
-  printf 'llama.cpp (%s): installed=%s latest=%s\n' "$BACKEND" "${CURRENT_VERSION:-none}" "$LLAMA_CPP_TAG"
-  if [ -z "$CURRENT_VERSION" ] || ! llama_cpp_versions_match "$LLAMA_CPP_TAG" "$CURRENT_VERSION"; then
+  printf 'llama.cpp (%s): installed=%s latest=%s\n' "$BACKEND" "${CURRENT_VERSION:-none}" "$COMPARE_TAG"
+  if [ -z "$CURRENT_VERSION" ] || ! llama_cpp_versions_match "$COMPARE_TAG" "$CURRENT_VERSION"; then
     NEED_CPP_FOR+=("$BACKEND")
   fi
 done

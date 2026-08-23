@@ -69,6 +69,58 @@ release_api_for_version() {
   fi
 }
 
+# resolve_llama_cpp_latest_json: fetches the release JSON that "latest"
+# means for $LLAMA_CPP_CHANNEL. GET /releases/latest only ever resolves
+# GitHub's own notion of "latest", which now (since llama.cpp started
+# publishing non-prerelease vX.Y.Z stable tags) always means the stable
+# channel -- every b[NUM] bleeding-edge release is marked prerelease and is
+# therefore invisible to that endpoint. Tracking bleeding-edge instead means
+# walking the plain releases list and taking the newest b[NUM] entry.
+resolve_llama_cpp_latest_json() {
+  local channel="${LLAMA_CPP_CHANNEL:-bleeding-edge}"
+  local json
+
+  case "$channel" in
+    stable)
+      github_api_get "$LLAMA_CPP_LATEST_API"
+      ;;
+    bleeding-edge)
+      json="$(github_api_get "${LLAMA_CPP_RELEASES_API}?per_page=${LLAMA_CPP_RELEASES_PAGE_SIZE}")"
+      json="$(jq -c '[.[] | select(.tag_name | test("^b[0-9]+$"))][0] // empty' <<<"$json")"
+      [ -n "$json" ] || fail "no bleeding-edge (b[NUM]) llama.cpp release found in the last $LLAMA_CPP_RELEASES_PAGE_SIZE releases. Retry, or raise LLAMA_CPP_RELEASES_PAGE_SIZE if upstream published an unusually long run of stable releases."
+      printf '%s\n' "$json"
+      ;;
+    *)
+      fail "unsupported LLAMA_CPP_CHANNEL: $channel. Use bleeding-edge or stable."
+      ;;
+  esac
+}
+
+# resolve_llama_cpp_binary_json: given a resolved llama.cpp release JSON,
+# returns the release JSON that actually carries backend binaries. Every
+# b[NUM] release already does (returned unchanged); a stable vX.Y.Z release
+# instead carries a $LLAMA_CPP_NIGHTLY_TAG_ASSET asset naming the b[NUM]
+# release built from that same point, which is followed and fetched
+# instead. Not used for the cuda backend, which builds from source and can
+# check out $json's tag directly regardless of channel.
+resolve_llama_cpp_binary_json() {
+  local json="$1"
+  local nightly_url nightly_tag
+
+  nightly_url="$(release_asset_url "$json" "^${LLAMA_CPP_NIGHTLY_TAG_ASSET}\$")"
+  if [ -z "$nightly_url" ]; then
+    printf '%s\n' "$json"
+    return 0
+  fi
+
+  nightly_tag="$(curl -4 -fsSL "$nightly_url")" ||
+    fail "failed to download $LLAMA_CPP_NIGHTLY_TAG_ASSET from llama.cpp release $(jq -er '.tag_name' <<<"$json")"
+  nightly_tag="$(printf '%s' "$nightly_tag" | tr -d '[:space:]')"
+  [ -n "$nightly_tag" ] || fail "empty $LLAMA_CPP_NIGHTLY_TAG_ASSET asset in llama.cpp release $(jq -er '.tag_name' <<<"$json")"
+
+  github_api_get "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/$nightly_tag"
+}
+
 verify_release_asset() {
   local file="$1"
   local digest="$2"

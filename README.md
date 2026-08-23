@@ -110,6 +110,10 @@ LocalAI](https://github.com/hossbit/comai-linux-assistant-wiki/blob/main/Local-A
 page for custom directories, manual installs, backend selection, and pinned
 component versions.
 
+By default LocalAI tracks upstream llama.cpp's `b[NUM]` bleeding-edge builds
+(cut on nearly every commit). To track its slower `vX.Y.Z` stable releases
+instead, set `LLAMA_CPP_CHANNEL=stable` (see localai.conf).
+
 ## CUDA and Switching Backends
 
 Besides the prebuilt CPU/Vulkan/ROCm/OpenVINO/SYCL backends, LocalAI can also
