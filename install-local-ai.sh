@@ -450,7 +450,6 @@ echo
 echo "CLI command:"
 echo "  $LOCALAI_CLI_LINK"
 echo
-ensure_cli_on_path
 echo "Current versions:"
 llama_cpp_display_version "$LLAMA_CPP_BACKEND"
 echo "llama.cpp backend: $LLAMA_CPP_BACKEND"
@@ -465,3 +464,4 @@ if ! localai_has_model_entries "$MODELS_DIR"; then
   echo
 fi
 echo "============================================================"
+ensure_cli_on_path

@@ -451,8 +451,10 @@ ensure_cli_on_path() {
   esac
 
   if grep -qF "$LOCALAI_USER_BIN_DIR" "$rc_file" 2>/dev/null; then
-    echo "Note: $LOCALAI_USER_BIN_DIR is not on your current PATH, but $rc_file already references it."
-    echo "Restart your terminal to pick it up, or run: source $rc_file"
+    echo "IMPORTANT: the 'localai' command will not work in THIS terminal window yet."
+    echo "$rc_file already references $LOCALAI_USER_BIN_DIR, but this window started before that took effect."
+    echo "Run this now:  source $rc_file"
+    echo "(or just open a new terminal window)"
     echo
     return 0
   fi
@@ -465,8 +467,10 @@ ensure_cli_on_path() {
       echo "    PATH=\"$LOCALAI_USER_BIN_DIR:\$PATH\""
       echo "fi"
     } >> "$rc_file"
-    echo "Added $LOCALAI_USER_BIN_DIR to PATH in $rc_file."
-    echo "Restart your terminal, or run: source $rc_file"
+    echo "IMPORTANT: the 'localai' command will not work in THIS terminal window yet."
+    echo "Added $LOCALAI_USER_BIN_DIR to PATH in $rc_file, but only new terminal windows pick that up."
+    echo "Run this now:  source $rc_file"
+    echo "(or just open a new terminal window)"
   else
     echo "Note: $LOCALAI_USER_BIN_DIR is not in your PATH, and $rc_file isn't writable."
     echo "Add it to your shell profile manually to run localai from anywhere."
