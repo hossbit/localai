@@ -178,7 +178,8 @@ verify_llama_server() {
 explain_llama_server_failure() {
   local hint
   hint="$(backend_dependency_hint "$LLAMA_CPP_BACKEND" 2>/dev/null)" ||
-    hint="Install the missing runtime libraries for your selected backend and rerun."
+    hint="Fix:
+  Install the missing runtime libraries for your selected backend and rerun."
 
   cat >&2 <<EOF
 Error: installed llama.cpp backend '$LLAMA_CPP_BACKEND' did not run on this system.
@@ -189,7 +190,7 @@ work on other glibc Linux distributions when runtime libraries are available.
 
 $hint
 
-Try another backend, for example:
+Or, try another backend:
   LLAMA_CPP_BACKEND=cpu $0
   LLAMA_CPP_BACKEND=vulkan $0
   LLAMA_CPP_BACKEND=auto $0

@@ -137,7 +137,13 @@ verify_release_asset() {
         fail "$label checksum verification failed"
       ;;
     *)
-      fail "missing sha256 digest for $label release asset. If you are pinning an older release before GitHub asset digests were available, rerun with LOCALAI_SKIP_DIGEST=1 to install without checksum verification."
+      fail "missing sha256 digest for $label release asset.
+
+This usually means you're pinning an older release from before GitHub
+started publishing asset digests.
+
+Fix:
+  Rerun with LOCALAI_SKIP_DIGEST=1 to install without checksum verification."
       ;;
   esac
 }
@@ -170,16 +176,16 @@ backend_dependency_hint() {
   local backend="$1"
   case "$backend" in
     vulkan)
-      echo "Vulkan needs an actual GPU driver with Vulkan support -- the loader alone (installed automatically) isn't enough. Check with: vulkaninfo"
+      printf 'Fix:\n  Check for a real Vulkan-capable driver -- the loader alone (installed\n  automatically) is not enough: vulkaninfo'
       ;;
     rocm)
-      echo "This backend needs AMD's ROCm runtime installed separately: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/"
+      printf 'Fix:\n  Install AMD'"'"'s ROCm runtime: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/'
       ;;
     openvino)
-      echo "This backend needs the Intel OpenVINO runtime installed separately: https://docs.openvino.ai/latest/openvino_docs_install_guides_overview.html"
+      printf 'Fix:\n  Install the Intel OpenVINO runtime: https://docs.openvino.ai/latest/openvino_docs_install_guides_overview.html'
       ;;
     sycl-fp16|sycl-fp32)
-      echo "This backend needs the Intel oneAPI Base Toolkit (DPC++ runtime) installed separately: https://www.intel.com/content/www/us/en/developer/tools/oneapi/toolkits.html"
+      printf 'Fix:\n  Install the Intel oneAPI Base Toolkit (DPC++ runtime): https://www.intel.com/content/www/us/en/developer/tools/oneapi/toolkits.html'
       ;;
     *)
       return 1

@@ -173,24 +173,37 @@ cuda_resolve_auto_backend() {
 # actually installed everything else on this system.
 cuda_toolkit_install_hint() {
   if command -v apt-get >/dev/null 2>&1; then
-    printf 'Install it with: sudo apt-get install nvidia-cuda-toolkit\n(Ubuntu/Debian repos often lag behind NVIDIA'"'"'s own releases; for a newer version use NVIDIA'"'"'s own repo instead: https://developer.nvidia.com/cuda-downloads)'
+    printf '  sudo apt-get install nvidia-cuda-toolkit\n  (Debian/Ubuntu repos often lag behind NVIDIA'"'"'s own releases -- for a newer\n  version, use NVIDIA'"'"'s own repo instead: https://developer.nvidia.com/cuda-downloads)'
   elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
-    printf 'Fedora/RHEL do not ship the CUDA Toolkit in their own repositories.\nInstall it from NVIDIA'"'"'s official CUDA repo for your version: https://developer.nvidia.com/cuda-downloads'
+    printf '  Fedora/RHEL do not ship the CUDA Toolkit in their own repositories.\n  Install it from NVIDIA'"'"'s official CUDA repo: https://developer.nvidia.com/cuda-downloads'
   else
-    printf 'Install a CUDA Toolkit matching your distribution: https://developer.nvidia.com/cuda-downloads'
+    printf '  https://developer.nvidia.com/cuda-downloads'
   fi
 }
 
 # Explicit LLAMA_CPP_BACKEND=cuda is strict by default: missing driver/nvcc
 # fails clearly and actionably. Only falls back (to vulkan, else cpu) when
 # LOCALAI_CUDA_FALLBACK=1. Prints the backend that should actually be used.
+#
+# Every fail()/warning message below follows the same shape so a user
+# scanning quickly can find the part they need without rereading a run-on
+# paragraph: one-line summary, then (if useful) one line of context, then a
+# "Fix:"/"Or, ...:" block with the exact command or setting on its own
+# indented line.
 cuda_resolve_explicit_backend() {
-  local nvcc reason=""
+  local nvcc reason="" hint=""
 
   if ! cuda_has_working_driver; then
     reason="no working NVIDIA GPU/driver was found (nvidia-smi)"
+    hint="If you do have an NVIDIA GPU, install or update its driver, then retry."
   elif ! nvcc="$(cuda_find_nvcc)"; then
-    reason="an NVIDIA GPU and driver were found, but nvcc was not found. nvidia-smi reporting a CUDA version is not proof the CUDA Toolkit is installed -- set LOCALAI_NVCC=/path/to/nvcc if you already have one, or:
+    reason="an NVIDIA GPU and driver were found, but nvcc was not found"
+    hint="nvidia-smi reporting a CUDA version is not proof the CUDA Toolkit is installed.
+
+Fix:
+  Already have a CUDA Toolkit? Point at it: LOCALAI_NVCC=/path/to/nvcc
+
+Or, install one:
 $(cuda_toolkit_install_hint)"
   fi
 
@@ -202,10 +215,16 @@ $(cuda_toolkit_install_hint)"
   fi
 
   if [ "${LOCALAI_CUDA_FALLBACK:-0}" != "1" ]; then
-    fail "LLAMA_CPP_BACKEND=cuda: $reason. Set LOCALAI_CUDA_FALLBACK=1 to fall back automatically, or choose another backend."
+    fail "cuda backend requested, but $reason.
+
+$hint
+
+Or, skip fixing this:
+  LOCALAI_CUDA_FALLBACK=1 falls back to another backend automatically
+  Choose a different backend yourself: vulkan, cpu, auto, ..."
   fi
 
-  echo "Warning: LLAMA_CPP_BACKEND=cuda requested but $reason; falling back (LOCALAI_CUDA_FALLBACK=1)." >&2
+  echo "Warning: cuda backend requested, but $reason -- falling back automatically (LOCALAI_CUDA_FALLBACK=1)." >&2
   if vulkan_is_usable; then
     printf 'vulkan\n'
   else
@@ -303,7 +322,13 @@ cuda_build_llama_cpp() {
 
   cuda_log "Configuring CUDA build (architectures: $architectures)"
   cmake "${cmake_args[@]}" >"$work_dir/configure.log" 2>&1 ||
-    fail "CUDA configure failed for architectures $architectures. Review $work_dir/configure.log or set LOCALAI_CUDA_ARCHITECTURES explicitly."
+    fail "CUDA configure failed for architectures $architectures.
+
+Fix:
+  Review the full error: $work_dir/configure.log
+
+Or:
+  Set LOCALAI_CUDA_ARCHITECTURES explicitly instead of auto-detecting."
 
   cuda_log "Compiling llama-server (source builds take longer than a prebuilt install)"
   cmake --build "$build_dir" --target llama-server -j "${jobs:-$(nproc 2>/dev/null || printf 4)}" \
@@ -398,7 +423,14 @@ cuda_build_and_install() {
   fi
 
   host_compiler="$(cuda_resolve_host_compiler "$nvcc")" ||
-    fail "nvcc did not accept the default host C++ compiler and no compatible g++ (11/12/13) was found. Install one (for example: sudo apt-get install g++-13) or point LOCALAI_NVCC at a toolkit that matches your compiler."
+    fail "nvcc rejected the default host C++ compiler, and no compatible g++ (11/12/13) was found.
+
+Fix:
+  Install a compatible g++ alongside your default compiler, e.g.:
+    sudo apt-get install g++-13
+
+Or:
+  Point LOCALAI_NVCC at a CUDA Toolkit that matches your compiler."
 
   build_dir="$tmp_dir/cuda-build"
   mkdir -p "$build_dir"
