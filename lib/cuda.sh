@@ -164,6 +164,23 @@ cuda_resolve_auto_backend() {
   fi
 }
 
+# cuda_toolkit_install_hint: one-line-per-item, copy-pasteable next step for
+# installing the CUDA Toolkit (nvcc). Never attempted automatically -- see
+# README.md/wiki for why (it can pull in its own NVIDIA driver as a
+# dependency, conflicting with one already installed). Keyed off the same
+# package-manager detection install_system_dependencies (lib/install.sh)
+# already uses, not distro ID, so it stays consistent with whatever
+# actually installed everything else on this system.
+cuda_toolkit_install_hint() {
+  if command -v apt-get >/dev/null 2>&1; then
+    printf 'Install it with: sudo apt-get install nvidia-cuda-toolkit\n(Ubuntu/Debian repos often lag behind NVIDIA'"'"'s own releases; for a newer version use NVIDIA'"'"'s own repo instead: https://developer.nvidia.com/cuda-downloads)'
+  elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+    printf 'Fedora/RHEL do not ship the CUDA Toolkit in their own repositories.\nInstall it from NVIDIA'"'"'s official CUDA repo for your version: https://developer.nvidia.com/cuda-downloads'
+  else
+    printf 'Install a CUDA Toolkit matching your distribution: https://developer.nvidia.com/cuda-downloads'
+  fi
+}
+
 # Explicit LLAMA_CPP_BACKEND=cuda is strict by default: missing driver/nvcc
 # fails clearly and actionably. Only falls back (to vulkan, else cpu) when
 # LOCALAI_CUDA_FALLBACK=1. Prints the backend that should actually be used.
@@ -173,7 +190,8 @@ cuda_resolve_explicit_backend() {
   if ! cuda_has_working_driver; then
     reason="no working NVIDIA GPU/driver was found (nvidia-smi)"
   elif ! nvcc="$(cuda_find_nvcc)"; then
-    reason="an NVIDIA GPU and driver were found, but nvcc was not found. nvidia-smi reporting a CUDA version is not proof the CUDA Toolkit is installed -- install a compatible CUDA Toolkit or set LOCALAI_NVCC=/path/to/nvcc"
+    reason="an NVIDIA GPU and driver were found, but nvcc was not found. nvidia-smi reporting a CUDA version is not proof the CUDA Toolkit is installed -- set LOCALAI_NVCC=/path/to/nvcc if you already have one, or:
+$(cuda_toolkit_install_hint)"
   fi
 
   if [ -z "$reason" ]; then

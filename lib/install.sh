@@ -156,6 +156,37 @@ download_verified_asset() {
   verify_release_asset "$output" "$digest" "$label"
 }
 
+# backend_dependency_hint: one-line, copy-pasteable next step for a prebuilt
+# backend whose downloaded binary didn't actually run -- almost always
+# because the vendor runtime/driver stack it needs isn't installed
+# (install_system_dependencies only ever installs generic build tooling and
+# the Vulkan loader, never a GPU vendor's own runtime). Returns non-zero for
+# a backend with no specific guidance (cpu should always run; an unknown
+# name), so the caller can fall back to its own generic message. Never
+# attempts to install any of these automatically -- same reasoning as
+# cuda_toolkit_install_hint (lib/cuda.sh): they're large, vendor-specific
+# stacks that can conflict with a driver already on the system.
+backend_dependency_hint() {
+  local backend="$1"
+  case "$backend" in
+    vulkan)
+      echo "Vulkan needs an actual GPU driver with Vulkan support -- the loader alone (installed automatically) isn't enough. Check with: vulkaninfo"
+      ;;
+    rocm)
+      echo "This backend needs AMD's ROCm runtime installed separately: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/"
+      ;;
+    openvino)
+      echo "This backend needs the Intel OpenVINO runtime installed separately: https://docs.openvino.ai/latest/openvino_docs_install_guides_overview.html"
+      ;;
+    sycl-fp16|sycl-fp32)
+      echo "This backend needs the Intel oneAPI Base Toolkit (DPC++ runtime) installed separately: https://www.intel.com/content/www/us/en/developer/tools/oneapi/toolkits.html"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 select_llama_cpp_asset_regex() {
   if [ "${1:-}" = "--detect-installed" ] && [ -z "$LLAMA_CPP_BACKEND" ]; then
     if [ -f "$CONF_DIR/$LOCALAI_BACKEND_FILE" ]; then
