@@ -450,47 +450,6 @@ echo
 echo "CLI command:"
 echo "  $LOCALAI_CLI_LINK"
 echo
-ensure_cli_on_path() {
-  case ":$PATH:" in
-    *":$LOCALAI_USER_BIN_DIR:"*) return 0 ;;
-  esac
-
-  # ~/.profile only loads for *login* shells -- most terminal emulators open
-  # non-login interactive shells that source ~/.bashrc/~/.zshrc instead, so
-  # that's what needs the PATH addition for `localai` to actually resolve in
-  # a newly opened terminal. Falls back to ~/.profile for anything else, on
-  # the chance it's a login-shell-only setup (e.g. a bare TTY or SSH).
-  local rc_file
-  case "${SHELL:-}" in
-    */zsh) rc_file="$HOME/.zshrc" ;;
-    */bash) rc_file="$HOME/.bashrc" ;;
-    *) rc_file="$HOME/.profile" ;;
-  esac
-
-  if grep -qF "$LOCALAI_USER_BIN_DIR" "$rc_file" 2>/dev/null; then
-    echo "Note: $LOCALAI_USER_BIN_DIR is not on your current PATH, but $rc_file already references it."
-    echo "Restart your terminal to pick it up, or run: source $rc_file"
-    echo
-    return 0
-  fi
-
-  if [ -w "$rc_file" ] || { [ ! -e "$rc_file" ] && [ -w "$(dirname "$rc_file")" ]; }; then
-    {
-      echo
-      echo "# Added by the LocalAI installer: run \`localai\` from anywhere"
-      echo "if [ -d \"$LOCALAI_USER_BIN_DIR\" ] ; then"
-      echo "    PATH=\"$LOCALAI_USER_BIN_DIR:\$PATH\""
-      echo "fi"
-    } >> "$rc_file"
-    echo "Added $LOCALAI_USER_BIN_DIR to PATH in $rc_file."
-    echo "Restart your terminal, or run: source $rc_file"
-  else
-    echo "Note: $LOCALAI_USER_BIN_DIR is not in your PATH, and $rc_file isn't writable."
-    echo "Add it to your shell profile manually to run localai from anywhere."
-  fi
-  echo
-}
-
 ensure_cli_on_path
 echo "Current versions:"
 llama_cpp_display_version "$LLAMA_CPP_BACKEND"

@@ -428,3 +428,48 @@ install_localai_libs() {
     install -m644 "$path" "$dest_dir/$rel"
   done < <(find "$source_dir/lib" -type f | sort)
 }
+
+# ensure_cli_on_path: makes sure $LOCALAI_USER_BIN_DIR (where the localai CLI
+# symlink lives) is actually on PATH for new shells, appending the standard
+# PATH block to the caller's shell rc file if it isn't already there.
+# ~/.profile only loads for *login* shells -- most terminal emulators open
+# non-login interactive shells that source ~/.bashrc/~/.zshrc instead, so
+# that's what needs the addition for `localai` to resolve in a newly opened
+# terminal. Falls back to ~/.profile for anything else, on the chance it's a
+# login-shell-only setup (e.g. a bare TTY or SSH). Idempotent: skips the
+# append if the rc file already references the directory.
+ensure_cli_on_path() {
+  case ":$PATH:" in
+    *":$LOCALAI_USER_BIN_DIR:"*) return 0 ;;
+  esac
+
+  local rc_file
+  case "${SHELL:-}" in
+    */zsh) rc_file="$HOME/.zshrc" ;;
+    */bash) rc_file="$HOME/.bashrc" ;;
+    *) rc_file="$HOME/.profile" ;;
+  esac
+
+  if grep -qF "$LOCALAI_USER_BIN_DIR" "$rc_file" 2>/dev/null; then
+    echo "Note: $LOCALAI_USER_BIN_DIR is not on your current PATH, but $rc_file already references it."
+    echo "Restart your terminal to pick it up, or run: source $rc_file"
+    echo
+    return 0
+  fi
+
+  if [ -w "$rc_file" ] || { [ ! -e "$rc_file" ] && [ -w "$(dirname "$rc_file")" ]; }; then
+    {
+      echo
+      echo "# Added by the LocalAI installer: run \`localai\` from anywhere"
+      echo "if [ -d \"$LOCALAI_USER_BIN_DIR\" ] ; then"
+      echo "    PATH=\"$LOCALAI_USER_BIN_DIR:\$PATH\""
+      echo "fi"
+    } >> "$rc_file"
+    echo "Added $LOCALAI_USER_BIN_DIR to PATH in $rc_file."
+    echo "Restart your terminal, or run: source $rc_file"
+  else
+    echo "Note: $LOCALAI_USER_BIN_DIR is not in your PATH, and $rc_file isn't writable."
+    echo "Add it to your shell profile manually to run localai from anywhere."
+  fi
+  echo
+}
