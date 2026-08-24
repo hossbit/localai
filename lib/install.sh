@@ -215,18 +215,38 @@ select_llama_cpp_asset_regex() {
   esac
 }
 
-# llama_cpp_backend_version: prints the installed version string for
+# llama_cpp_backend_version: prints the installed build number for
 # $BIN_DIR/llama.cpp.d/<backend>, or nothing if that slot doesn't exist or
 # its binary won't run. Sets LD_LIBRARY_PATH to the backend's own directory
 # -- unlike upstream's prebuilt releases (which typically bake in an rpath),
 # a locally-built binary such as the CUDA backend needs it to find its
 # sibling shared libraries, and running it without would silently look like
 # "not installed" rather than an actual version mismatch.
+#
+# Handles two `llama-server --version` formats upstream has used: older
+# builds print "version: 10252 (hash)" (the build number is $2 directly);
+# builds since llama.cpp's stable/bleeding-edge split print
+# "version: 0.2.0-dev (build 10603, commit hash)" (the semantic version is
+# $2 now, with the actual build number in the "(build N, ...)" part
+# instead). Reproduces a real bug: taking $2 unconditionally silently
+# started returning "0.2.0-dev" for every current build, which never
+# equals a resolved b[NUM] tag in llama_cpp_versions_match -- every
+# `localai update`/`backend install` call redownloaded and reinstalled an
+# already-current backend, every single time.
 llama_cpp_backend_version() {
   local backend="$1"
   local dir="$BIN_DIR/llama.cpp.d/$backend"
   LD_LIBRARY_PATH="$dir:${LD_LIBRARY_PATH:-}" "$dir/llama-server" --version 2>&1 |
-    awk '/version:/ {print $2; exit}' || true
+    awk '
+      /version:/ {
+        if (match($0, /\(build [0-9]+/)) {
+          print substr($0, RSTART + 7, RLENGTH - 7)
+        } else {
+          print $2
+        }
+        exit
+      }
+    ' || true
 }
 
 # _llama_cpp_format_display_version: given a backend name and the raw first
