@@ -183,7 +183,7 @@ cuda_resolve_explicit_backend() {
     return 0
   fi
 
-  if [ "${LOCALAI_CUDA_FALLBACK:-1}" != "1" ]; then
+  if [ "${LOCALAI_CUDA_FALLBACK:-0}" != "1" ]; then
     fail "LLAMA_CPP_BACKEND=cuda: $reason. Set LOCALAI_CUDA_FALLBACK=1 to fall back automatically, or choose another backend."
   fi
 
