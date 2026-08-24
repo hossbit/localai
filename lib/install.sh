@@ -438,6 +438,12 @@ install_localai_libs() {
 # terminal. Falls back to ~/.profile for anything else, on the chance it's a
 # login-shell-only setup (e.g. a bare TTY or SSH). Idempotent: skips the
 # append if the rc file already references the directory.
+#
+# Return status tells the caller whether re-execing into a fresh shell
+# (reconnect_shell_on_path below) is worth attempting: 0 means PATH is
+# already correct in the *current* shell, nothing to do; 2 means the rc file
+# is now correct but this shell hasn't picked it up, a re-exec would help;
+# 1 means the rc file couldn't be fixed at all, a re-exec would not help.
 ensure_cli_on_path() {
   case ":$PATH:" in
     *":$LOCALAI_USER_BIN_DIR:"*) return 0 ;;
@@ -456,7 +462,7 @@ ensure_cli_on_path() {
     echo "Run this now:  source $rc_file"
     echo "(or just open a new terminal window)"
     echo
-    return 0
+    return 2
   fi
 
   if [ -w "$rc_file" ] || { [ ! -e "$rc_file" ] && [ -w "$(dirname "$rc_file")" ]; }; then
@@ -471,9 +477,39 @@ ensure_cli_on_path() {
     echo "Added $LOCALAI_USER_BIN_DIR to PATH in $rc_file, but only new terminal windows pick that up."
     echo "Run this now:  source $rc_file"
     echo "(or just open a new terminal window)"
-  else
-    echo "Note: $LOCALAI_USER_BIN_DIR is not in your PATH, and $rc_file isn't writable."
-    echo "Add it to your shell profile manually to run localai from anywhere."
+    echo
+    return 2
   fi
+
+  echo "Note: $LOCALAI_USER_BIN_DIR is not in your PATH, and $rc_file isn't writable."
+  echo "Add it to your shell profile manually to run localai from anywhere."
   echo
+  return 1
+}
+
+# reconnect_shell_on_path: when ensure_cli_on_path reports the rc file is
+# fixed but this shell isn't (status 2), and we're actually in an
+# interactive terminal (stdout is a tty -- true for `curl ... | bash` even
+# though stdin is the pipe curl fed the script through), replace this
+# process with a fresh interactive shell reading from the real terminal
+# device so `localai` works immediately with no action from the user.
+# /dev/tty always refers to the controlling terminal regardless of what
+# stdin was redirected to, which is what makes this safe to attempt even
+# though the script's own stdin is the exhausted curl pipe. A plain
+# `exec "$SHELL"` would inherit that same exhausted stdin and misbehave, so
+# stdin is explicitly reopened from /dev/tty; stdout/stderr are already the
+# terminal (that's what [ -t 1 ] just confirmed) and are left alone. Falls
+# through silently if any precondition isn't met -- the message
+# ensure_cli_on_path already printed is the fallback.
+reconnect_shell_on_path() {
+  local ensure_status="$1"
+
+  [ "$ensure_status" -eq 2 ] || return 0
+  [ -t 1 ] || return 0
+  [ -r /dev/tty ] || return 0
+  [ -n "${SHELL:-}" ] && command -v "$SHELL" >/dev/null 2>&1 || return 0
+
+  echo "Switching this terminal to a fresh shell so 'localai' works right now..."
+  echo
+  exec "$SHELL" -i < /dev/tty
 }

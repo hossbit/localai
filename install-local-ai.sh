@@ -464,4 +464,6 @@ if ! localai_has_model_entries "$MODELS_DIR"; then
   echo
 fi
 echo "============================================================"
-ensure_cli_on_path
+ENSURE_PATH_STATUS=0
+ensure_cli_on_path || ENSURE_PATH_STATUS=$?
+reconnect_shell_on_path "$ENSURE_PATH_STATUS"
