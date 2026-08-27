@@ -285,9 +285,35 @@ cuda_resolve_host_compiler() {
 # Build
 ###############################################################################
 
+# cuda_build_tools_install_hint: distro-aware install command for the ordinary
+# build tooling a CUDA source build needs (compiler toolchain, cmake, git).
+# Unlike the CUDA Toolkit itself (cuda_toolkit_install_hint), these are the
+# same generic packages install-local-ai.sh already installs automatically
+# for a fresh LLAMA_CPP_BACKEND=cuda install -- safe to name a direct command
+# for, just not (yet) auto-installed from this runtime path.
+cuda_build_tools_install_hint() {
+  if command -v apt-get >/dev/null 2>&1; then
+    printf '  sudo apt-get install build-essential cmake git'
+  elif command -v dnf >/dev/null 2>&1; then
+    printf '  sudo dnf install gcc gcc-c++ make cmake git'
+  elif command -v yum >/dev/null 2>&1; then
+    printf '  sudo yum install gcc gcc-c++ make cmake git'
+  else
+    printf '  Install a C/C++ compiler, cmake, and git.'
+  fi
+}
+
 cuda_require_build_tools() {
-  command -v git >/dev/null 2>&1 || fail "git is required for CUDA source builds; install it and retry."
-  command -v cmake >/dev/null 2>&1 || fail "cmake is required for CUDA source builds; install it and retry."
+  local missing=()
+
+  command -v git >/dev/null 2>&1 || missing+=(git)
+  command -v cmake >/dev/null 2>&1 || missing+=(cmake)
+  [ "${#missing[@]}" -eq 0 ] && return 0
+
+  fail "missing build tool(s) required for CUDA source builds: ${missing[*]}
+
+Fix:
+$(cuda_build_tools_install_hint)"
 }
 
 # Clones the pinned llama.cpp revision, configures + builds only the
